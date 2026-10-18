@@ -1,0 +1,27 @@
+[project]
+name = "call-me-maybe"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "llm_sdk",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.1",
+]
+
+[tool.uv.sources]
+llm_sdk = { workspace = true }
+
+[tool.uv.workspace]
+members = ["llm_sdk"]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.4.1",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing"
+testpaths = ["tests"]

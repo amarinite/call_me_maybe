@@ -9,6 +9,11 @@ data I/O
 	2) load valid JSON file successfully into the structure
 	3) handle argparse to add the file in the terminal if needed
 
+explore SDK
+  1) test sdk functions
+  2) do basic unconstrained loop
+  3) add constraints, one at a time: function name -> number -> string -> boolean
+
 main loop:
 	1) read the prompt from the function calling file
 	2) hardcode the full prompt: original prompt + instructions with the function definition
@@ -29,3 +34,5 @@ constrained decoder:
     Handle multiple parameters
     Handle different types (number, string, boolean)
     Handle the model's choice of which function to call
+
+error handling, tests, speed
