@@ -12,6 +12,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Coverage artifacts
+.coverage
+.coverage.*
+
 # Build artifacts
 dist/
 build/
