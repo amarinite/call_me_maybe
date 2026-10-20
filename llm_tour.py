@@ -11,7 +11,7 @@ def main() -> None:
     model = Small_LLM_Model()
     print("Model loaded.")
 
-    # ---------- encode ----------
+    # encode
     text = "What is the sum of 213 and 3?"
     tensor = model.encode(text)
     print(f"\nencode({text!r})")
@@ -22,7 +22,7 @@ def main() -> None:
     input_ids = tensor[0].tolist()
     print(f"  list[int]: {input_ids}  (len={len(input_ids)})")
 
-    # ---------- vocab ----------
+    # vocab
     vocab_path = Path(model.get_path_to_vocab_file())
     with open(vocab_path, "r", encoding="utf-8") as f:
         raw_vocab = json.load(f)
@@ -38,14 +38,14 @@ def main() -> None:
         id_to_token = {int(v): k for k, v in raw_vocab.items()}
         print("  direction: token -> ID (inverted)")
 
-    # ---------- logits ----------
+    # logits
     logits = model.get_logits_from_input_ids(input_ids)
     print(f"\nget_logits_from_input_ids")
     print(f"  type: {type(logits)}")
     print(f"  len:  {len(logits)}  (vocab size: {len(id_to_token)})")
     print(f"  match: {len(logits) == len(id_to_token)}")
 
-    # ---------- argmax + decode ----------
+    # argmax + decode
     arr = np.asarray(logits)
     best_id = int(arr.argmax())
     best_logit = float(arr[best_id])
@@ -55,7 +55,7 @@ def main() -> None:
     print(f"  token: {id_to_token.get(best_id)!r}")
     print(f"  decode: {model.decode([best_id])!r}")
 
-    # ---------- top 10 ----------
+    # top 10
     print(f"\ntop 10 tokens next")
     top10_idx = np.argsort(arr)[-10:][::-1]
     for idx in top10_idx:
@@ -65,6 +65,10 @@ def main() -> None:
             f"token={id_to_token.get(i)!r}  "
             f"decode={model.decode([i])!r}"
         )
+
+    # max min
+    print(f"\nmax token: {max(id_to_token)}")
+    print(f"\nmin token: {min(id_to_token)}")
 
 
 if __name__ == "__main__":
