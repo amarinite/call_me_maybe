@@ -22,6 +22,30 @@ Run stuff
 
 ## Design Decisions
 
+```text
+┌──────────────────────────────────────────────┐
+│  __main__.py                                 │
+│  Orchestration: read files, loop prompts,    │
+│  write results.                              │
+└──────────────────────────────────────────────┘
+                    │
+    ┌───────────────┼────────────────┐
+    ▼               ▼                ▼
+┌────────┐   ┌──────────────┐   ┌──────────────┐
+│ loader │   │ context      │   │ constraint   │
+│        │   │              │   │              │
+│ file → │   │ schema +     │   │ generated    │
+│ model  │   │ prompt → LLM │   │ text → legal │
+│        │   │ input text   │   │ token IDs    │
+└────────┘   └──────────────┘   └──────────────┘
+                                       │
+                                       ▼
+                                ┌──────────────┐
+                                │ vocab        │
+                                │ (id ↔ string)│
+                                └──────────────┘
+```
+
 ## Performance Analysis
 
 ## Challenges Faced
