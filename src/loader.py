@@ -49,10 +49,6 @@ _VOCAB_ADAPTER: TypeAdapter[
 ] = TypeAdapter(
     dict[str, Annotated[int, Field(strict=True, ge=0)]]
 )
-# Strict mode rejects booleans masquerading as ints, ge=0 ensures non-negative IDs
-_VOCAB_ADAPTER: TypeAdapter[dict[str, Annotated[int, Field(strict=True, ge=0)]]] = TypeAdapter(
-	dict[str, Annotated[int, Field(strict=True, ge=0)]]
-)
 
 
 def load_func_definitions(path: Path) -> list[FunctionDef]:
