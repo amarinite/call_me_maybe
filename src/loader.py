@@ -37,7 +37,6 @@ def _load_list[T](
     except ValidationError as e:
         raise LoadingError(f"invalid {label} in {path}:\n{e}") from e
 
-
 _FUNC_DEFS_ADAPTER: TypeAdapter[list[FunctionDef]] = TypeAdapter(
     list[FunctionDef]
 )
@@ -49,6 +48,10 @@ _VOCAB_ADAPTER: TypeAdapter[
     dict[str, Annotated[int, Field(strict=True, ge=0)]]
 ] = TypeAdapter(
     dict[str, Annotated[int, Field(strict=True, ge=0)]]
+)
+# Strict mode rejects booleans masquerading as ints, ge=0 ensures non-negative IDs
+_VOCAB_ADAPTER: TypeAdapter[dict[str, Annotated[int, Field(strict=True, ge=0)]]] = TypeAdapter(
+	dict[str, Annotated[int, Field(strict=True, ge=0)]]
 )
 
 
