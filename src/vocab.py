@@ -47,9 +47,11 @@ class Vocab(BaseModel):
     id_to_bytes: dict[int, bytes]
     _max_id: int = PrivateAttr(default=-1)
     _id_to_text: dict[int, str | None] = PrivateAttr(default_factory=dict)
+    _bytes_to_ids: dict[bytes, int] = PrivateAttr(default_factory=dict)
 
     def model_post_init(self, __context: object) -> None:
         super().model_post_init(__context)
+
         self._max_id = max(self.id_to_bytes.keys()) if self.id_to_bytes else -1
 
         text_map: dict[int, str | None] = {}
@@ -60,10 +62,20 @@ class Vocab(BaseModel):
                 text_map[tid] = None
         self._id_to_text = text_map
 
+        bytes_map: dict[bytes, int] = {}
+        for tid, raw in self.id_to_bytes.items():
+            bytes_map[raw] = tid
+        self._bytes_to_ids = bytes_map
+
     @property
     def max_id(self) -> int:
         """Return the highest token ID in the vocabulary."""
         return self._max_id
+
+    @property
+    def bytes_to_ids(self) -> dict[bytes, int]:
+        """Reverse map: raw bytes -> token id."""
+        return self._bytes_to_ids
 
     def token_bytes(self, token_id: int) -> bytes:
         """Return exact raw bytes for a token ID."""

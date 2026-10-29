@@ -56,5 +56,6 @@ Run stuff
 
 ## Resources
 [JSON Schema Types](https://json-schema.org/understanding-json-schema/reference/type)
+[Qwen Function Calling Format](https://qwen.readthedocs.io/en/latest/framework/function_call.html)
 
 ### AI Usage

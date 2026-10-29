@@ -37,6 +37,7 @@ def _load_list[T](
     except ValidationError as e:
         raise LoadingError(f"invalid {label} in {path}:\n{e}") from e
 
+
 _FUNC_DEFS_ADAPTER: TypeAdapter[list[FunctionDef]] = TypeAdapter(
     list[FunctionDef]
 )
