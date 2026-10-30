@@ -45,6 +45,9 @@ class SharedMasks(BaseModel):
     # String content: decodable token, no '"', no '\\', no ctrl bytes
     string_content: Mask
 
+    # '"' plus only JSON structure: '",' '"}' '"}}\n'
+    string_close: Mask
+
     @classmethod
     def build(cls, vocab: Vocab, size: int) -> SharedMasks:
         """Build every mask from the vocabulary"""
@@ -69,6 +72,11 @@ class SharedMasks(BaseModel):
                 continue
             string_content_ids.add(tid)
 
+        string_close_ids = {
+            tid for tid, raw in vocab.items()
+            if raw.startswith(b'"') and not raw[1:].strip(b",} \n")
+        }
+
         return cls(
             size=size,
             digits=_make_mask(size, digits),
@@ -80,6 +88,7 @@ class SharedMasks(BaseModel):
             number_start=_make_mask(size, digits | {minus}),
             number_continue=_make_mask(size, digits | {dot}),
             string_content=_make_mask(size, string_content_ids),
+            string_close=_make_mask(size, string_close_ids),
         )
 
 

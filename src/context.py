@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable
+from typing import Any
 
 from src.models import FunctionDef
 
@@ -27,17 +27,17 @@ def head(prompt: str) -> str:
 
 
 # Static pieces
-INSTRUCTIONS = (
+SELECT_INSTRUCTIONS = (
     "You are a function-calling engine.\n"
-    "Given a request, pick exactly one function and extract its arguments.\n"
-    "Reply with a single JSON object and nothing else.\n"
+    "Pick the one function that does what the request asks.\n"
     "Available functions:"
 )
 
-FEW_SHOT: tuple[tuple[str, str, dict[str, Any]], ...] = (
-    ("What is the sum of 2 and 3?", "fn_add_numbers", {"a": 2.0, "b": 3.0}),
-    ("Greet shrek", "fn_greet", {"name": "shrek"}),
-    ("Reverse the string 'hello'", "fn_reverse_string", {"s": "hello"}),
+ARGS_INSTRUCTIONS = (
+    "You are a function-calling engine.\n"
+    "Extract the arguments from the request. "
+    "Copy values exactly as written in the request.\n"
+    "Function:"
 )
 
 
@@ -48,25 +48,12 @@ def format_function(fn: FunctionDef) -> str:
     return f"- {fn.name}({params}): {desc}"
 
 
-def render_examples(
-    examples: Iterable[tuple[str, str, dict[str, Any]]],
-) -> str:
-    """Render few-shot examples as ``Request: ...`` + ``call_text`` pairs."""
-    return "\n".join(
-        call_text(prompt, name, params)
-        for prompt, name, params in examples
-    )
-
-
-def build_prefix(functions: list[FunctionDef]) -> str:
-    """The prompt-independent part of the prompt. Cache once per run."""
+def build_select_prefix(functions: list[FunctionDef]) -> str:
+    """Prompt for choosing the function: the full menu."""
     menu = "\n".join(format_function(fn) for fn in functions)
-    examples = render_examples(FEW_SHOT)
-    return (
-        f"{INSTRUCTIONS}\n"
-        f"{menu}\n"
-        f"\n"
-        f"Examples:\n"
-        f"{examples}"
-        f"\n"
-    )
+    return f"{SELECT_INSTRUCTIONS}\n{menu}\n\n"
+
+
+def build_args_prefix(fn: FunctionDef) -> str:
+    """Prompt for extracting arguments: only the chosen function."""
+    return f"{ARGS_INSTRUCTIONS}\n{format_function(fn)}\n\n"

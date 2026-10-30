@@ -16,7 +16,8 @@ Contract these tests assume (rename in one place if yours differs):
             max_value_tokens=int)       keyword-only
     Decoder.decode(prompt: str) -> OutputResult
     Decoder.last_ids: list[int]         token ids of the model's final
-                                        context (prefix + whole call text)
+                                        context (args prefix + whole call
+                                        text)
     DecoderError(Exception)             bad function set at construction,
                                         or an impossible state mid-run
 
@@ -24,8 +25,9 @@ Contract these tests assume (rename in one place if yours differs):
     model.get_logits_from_input_ids(ids) -> list[float], len >= len(vocab)
 
 What the decoder must guarantee:
-  * The context the model ends up with is EXACTLY
-        build_prefix(functions) + call_text(prompt, name, params)
+  * The name is chosen under build_select_prefix(functions). The context
+    the model ends up with is EXACTLY
+        build_args_prefix(chosen) + call_text(prompt, name, params)
     (for numbers the model writes the same digits json.dumps would).
   * Output is built from typed values, never parsed from generated text.
   * Value caps: after max_value_tokens tokens inside a string or a number,
@@ -41,7 +43,12 @@ from typing import Any, Callable
 import numpy as np
 import pytest
 
-from src.context import build_prefix, call_text, head
+from src.context import (
+	build_args_prefix,
+	build_select_prefix,
+	call_text,
+	head,
+)
 from src.decoder import Decoder, DecoderError
 from src.models import FunctionDef, OutputResult
 from src.vocab import Vocab
@@ -149,7 +156,25 @@ FUNCS = [
 	fn("fn_toggle", "Turn something on or off.", on="boolean"),
 	fn("fn_now", "Return the time."),
 ]
-PREFIX = build_prefix(FUNCS).encode()
+
+
+def args_context(functions: list[FunctionDef], name: str, want: str) -> bytes:
+	"""The exact context the model ends up with for one finished call."""
+	chosen = next(f for f in functions if f.name == name)
+	return build_args_prefix(chosen).encode() + want.encode()
+
+
+def two_stage_teacher(
+	functions: list[FunctionDef], name: str, want: str,
+) -> Callable[[bytes], list[float]]:
+	"""A teacher that follows both prompts: name first, then arguments."""
+	select = build_select_prefix(functions).encode() + want.encode()
+	choose = teacher(select)
+	extract = teacher(args_context(functions, name, want))
+
+	def score(ctx: bytes) -> list[float]:
+		return choose(ctx) if select.startswith(ctx) else extract(ctx)
+	return score
 
 
 def make(functions: list[FunctionDef], scorer: Callable[..., Any],
@@ -187,19 +212,19 @@ def test_teacher_gets_exactly_the_canonical_call(
 	prompt: str, name: str, params: dict[str, Any],
 ) -> None:
 	want = call_text(prompt, name, params)
-	dec, _ = make(FUNCS, teacher(PREFIX + want.encode()))
+	dec, _ = make(FUNCS, two_stage_teacher(FUNCS, name, want))
 	res = dec.decode(prompt)
 	assert isinstance(res, OutputResult)
 	# call_text tells 2 from 2.0 and true from 1, unlike ==
 	assert call_text(res.prompt, res.name, res.parameters) == want
-	assert detok(dec.last_ids) == PREFIX + want.encode()
+	assert detok(dec.last_ids) == args_context(FUNCS, name, want)
 
 
 def test_function_name_that_prefixes_another_can_be_chosen() -> None:
 	for name, params in (("fn_add", {"x": 1}),
 			("fn_add_numbers", {"a": 1.0, "b": 2.0})):
 		want = call_text("p", name, params)
-		dec, _ = make(FUNCS, teacher(PREFIX + want.encode()))
+		dec, _ = make(FUNCS, two_stage_teacher(FUNCS, name, want))
 		assert dec.decode("p").name == name
 
 
@@ -234,7 +259,7 @@ def test_random_model_always_produces_a_valid_call(
 	check_types(res, f)
 	assert res.prompt == 'request "q" é'
 	assert all(i < len(TOKENS) for i in dec.last_ids), "padding id chosen"
-	pre = build_prefix([f]).encode() + head('request "q" é').encode()
+	pre = build_args_prefix(f).encode() + head('request "q" é').encode()
 	assert detok(dec.last_ids).startswith(pre)
 
 
@@ -294,14 +319,13 @@ def test_default_cap_stops_a_runaway_model() -> None:
 # --------------------------------------------------------------------------
 
 def test_literal_scaffold_costs_no_forward_pass() -> None:
-	f = FUNCS[5]                      # fn_now: only the name is a decision
+	f = FUNCS[5]                      # fn_now: no parameters, only one name
 	want = call_text("what time", "fn_now", {})
-	dec, model = make([f], teacher(build_prefix([f]).encode() + want.encode()))
+	dec, model = make([f], two_stage_teacher([f], "fn_now", want))
 	before = len(model.calls)         # a probe in __init__ is fine
 	dec.decode("what time")
-	used = len(model.calls) - before
-	name_steps = len(model.encode('fn_now"')[0])
-	assert used <= name_steps + 1
+	assert len(model.calls) == before  # a single name is not a decision
+	assert detok(dec.last_ids) == args_context([f], "fn_now", want)
 
 
 def test_decode_leaves_no_state_behind() -> None:
@@ -310,16 +334,17 @@ def test_decode_leaves_no_state_behind() -> None:
 		"B": call_text("B", "fn_greet", {"name": "bo"}),
 	}
 
+	names = {"A": "fn_add", "B": "fn_greet"}
+
 	def by_prompt(ctx: bytes) -> list[float]:
-		tail = ctx[len(PREFIX):]
-		key = "A" if tail.startswith(head("A").encode()) else "B"
-		return teacher(PREFIX + want[key].encode())(ctx)
+		key = "A" if head("A").encode() in ctx else "B"
+		return two_stage_teacher(FUNCS, names[key], want[key])(ctx)
 
 	dec, _ = make(FUNCS, by_prompt)
 	first = dec.decode("A")
 	assert dec.decode("B").name == "fn_greet"
 	assert dec.decode("A") == first
-	assert detok(dec.last_ids) == PREFIX + want["A"].encode()
+	assert detok(dec.last_ids) == args_context(FUNCS, "fn_add", want["A"])
 
 
 # --------------------------------------------------------------------------

@@ -13,7 +13,7 @@ from src.constraint import (
     StringConstraint,
     mask_logits,
 )
-from src.context import build_prefix, head
+from src.context import build_args_prefix, build_select_prefix, head
 from src.models import FunctionDef, OutputResult
 from src.vocab import Vocab
 from llm_sdk import Small_LLM_Model  # type: ignore
@@ -47,14 +47,16 @@ class Decoder:
 
         self.masks = SharedMasks.build(vocab, self._size)
 
-        self._prefix_text: str = build_prefix(functions)
-        self._prefix_ids: list[int] = self._encode(self._prefix_text)
-
-        self._name_choice = ChoiceConstraint(
-            options=tuple((f.name + '"').encode("utf-8") for f in functions),
-            vocab=vocab,
-            masks=self.masks,
+        self._select_ids: list[int] = self._encode(
+            build_select_prefix(functions)
         )
+        self._args_ids: dict[str, list[int]] = {
+            f.name: self._encode(build_args_prefix(f)) for f in functions
+        }
+
+        self._name_tokens: dict[str, list[int]] = {
+            f.name: self._encode(f.name + '"') for f in functions
+        }
         self._bool_choice = ChoiceConstraint(
             options=(b"true", b"false"),
             vocab=vocab,
@@ -78,10 +80,12 @@ class Decoder:
 
     def decode(self, prompt: str) -> OutputResult:
         head_text = head(prompt)
-        ids: list[int] = list(self._prefix_ids) + self._encode(head_text)
+        ids: list[int] = list(self._select_ids) + self._encode(head_text)
 
         name = self._run_name_choice(ids)
-        ids.extend(self._encode(', "parameters": {'))
+        ids = list(self._args_ids[name]) + self._encode(
+            head_text + name + '", "parameters": {'
+        )
 
         schema = self._by_name[name].parameters
         params: dict[str, Any] = {}
@@ -114,10 +118,29 @@ class Decoder:
         return OutputResult(prompt=prompt, name=name, parameters=params)
 
     def _run_name_choice(self, ids: list[int]) -> str:
-        buf = self._run_constraint(
-            self._name_choice, ids=ids, closer=self.masks.quote,
-        )
-        return self._name_choice.value(buf)
+        """Pick a function name; only call the model where names differ."""
+        candidates = self._name_tokens
+        depth = 0
+
+        while len(candidates) > 1:
+            next_ids = {tokens[depth] for tokens in candidates.values()}
+            if len(next_ids) == 1:
+                tid = next_ids.pop()
+            else:
+                allowed = np.zeros(self._size, dtype=bool)
+                allowed[list(next_ids)] = True
+                logits = np.asarray(self._model.get_logits_from_input_ids(ids))
+                tid = int(mask_logits(logits, allowed).argmax())
+            ids.append(tid)
+            candidates = {
+                name: tokens for name, tokens in candidates.items()
+                if tokens[depth] == tid
+            }
+            depth += 1
+
+        name, tokens = next(iter(candidates.items()))
+        ids.extend(tokens[depth:])
+        return name
 
     def _run_value(
         self, type_name: str, *, is_last: bool, ids: list[int]
@@ -169,6 +192,9 @@ class Decoder:
                 )
 
             logits = np.asarray(self._model.get_logits_from_input_ids(ids))
+            if isinstance(constraint, StringConstraint):
+                best_close = logits[self.masks.string_close].max()
+                logits[self.masks.quote] = best_close
             tid = int(mask_logits(logits, allowed).argmax())
             ids.append(tid)
             buf += self._vocab.token_bytes(tid)
