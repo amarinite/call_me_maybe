@@ -81,7 +81,7 @@ def main() -> int:
 
     for index, item in enumerate(prompts, start=1):
         print(
-            f"[{index}/{total}] {_short(item.prompt)!r}",
+            f"[{index}/{total}] {item.prompt!r}",
             file=sys.stderr,
             flush=True,
         )
@@ -110,15 +110,12 @@ def main() -> int:
         print(f"error: cannot write {args.output}: {e}", file=sys.stderr)
         return 1
 
-    total = len(prompts)
-    ok = len(results)
-    print(f"wrote {ok}/{total} result(s) to {args.output}")
+    print(f"wrote {len(results)}/{total} result(s) to {args.output}")
 
     if failures:
         print(f"{len(failures)} prompt(s) failed:", file=sys.stderr)
         for index, prompt, reason in failures:
-            short = prompt if len(prompt) <= 60 else prompt[:57] + "..."
-            print(f"  #{index}: {short!r} -> {reason}", file=sys.stderr)
+            print(f"  #{index}: {prompt!r} -> {reason}", file=sys.stderr)
         return 1
 
     return 0
